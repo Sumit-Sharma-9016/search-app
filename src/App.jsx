@@ -349,17 +349,17 @@ export default function SearchApp() {
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6">
         
         {/* Settings / Auto-Mic Toggle */}
-        <div className="absolute top-6 right-4 sm:right-6">
+        <div className="absolute top-4 right-2 sm:top-6 sm:right-6">
            <button 
              onClick={toggleAutoMic}
-             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+             className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-all ${
                autoMic 
                ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' 
                : 'bg-neutral-900/50 border-white/10 text-neutral-500 hover:text-neutral-300'
              }`}
            >
-             {autoMic ? <Zap size={14} className="fill-current" /> : <ZapOff size={14} />}
-             Auto-Mic {autoMic ? 'ON' : 'OFF'}
+             {autoMic ? <Zap size={12} className="fill-current" /> : <ZapOff size={12} />}
+             <span>Auto-Mic {autoMic ? 'ON' : 'OFF'}</span>
            </button>
         </div>
 
