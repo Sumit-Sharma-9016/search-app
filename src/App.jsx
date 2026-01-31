@@ -1,19 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon, Music, Hash, Code, ExternalLink, Globe, Loader2, Youtube, Film, ArrowRight, Command, Sparkles, Briefcase, Bot, Brain, LayoutGrid } from 'lucide-react';
+import { Search as SearchIcon, Music, Hash, Code, ExternalLink, Globe, Loader2, Youtube, Film, ArrowRight, Command, Sparkles, Briefcase, Bot, Brain, LayoutGrid, Twitter, Video, Mic, Zap, ZapOff } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, TouchSensor } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // --- API UTILITIES ---
 
 // 1. Music (iTunes API - Fixed with Proxy)
 const searchMusic = async (term) => {
   try {
-    // We use 'api.allorigins.win' as a proxy to prevent the 'musics://' redirect error and CORS blocks
     const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=12`;
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    
     const response = await fetch(proxyUrl);
-    
     if (!response.ok) throw new Error('Network response was not ok');
-    
     const data = await response.json();
     return data.results || [];
   } catch (error) {
@@ -34,24 +33,77 @@ const searchGithub = async (term) => {
   }
 };
 
+// --- DATA: ALL APPS ---
+const DEFAULT_APPS = [
+  { id: 'google', label: 'Google', iconName: 'SearchIcon', color: 'text-violet-400', url: 'https://www.google.com/search?q=' },
+  { id: 'chatgpt', label: 'ChatGPT', iconName: 'Bot', color: 'text-emerald-400', url: 'https://chatgpt.com/', copy: true },
+  { id: 'gemini', label: 'Gemini', iconName: 'Brain', color: 'text-blue-400', url: 'https://gemini.google.com/', copy: true },
+  { id: 'youtube', label: 'YouTube', iconName: 'Youtube', color: 'text-red-500', url: 'https://www.youtube.com/results?search_query=' },
+  { id: 'instagram', label: 'Instagram', iconName: 'Hash', color: 'text-pink-400', url: 'https://www.instagram.com/explore/tags/', suffix: '/' },
+  { id: 'reddit', label: 'Reddit', iconName: 'ExternalLink', color: 'text-orange-400', url: 'https://www.reddit.com/search/?q=' },
+  { id: 'dailymotion', label: 'Dailymotion', iconName: 'Film', color: 'text-neutral-400', url: 'https://www.dailymotion.com/search/' },
+  { id: 'linkedin', label: 'LinkedIn', iconName: 'Briefcase', color: 'text-blue-500', url: 'https://www.linkedin.com/search/results/all/?keywords=' },
+  { id: 'twitter', label: 'X / Twitter', iconName: 'Hash', color: 'text-white', url: 'https://twitter.com/search?q=' },
+  { id: 'perplexity', label: 'Perplexity', iconName: 'Sparkles', color: 'text-cyan-400', url: 'https://www.perplexity.ai/search?q=' },
+  { id: 'duckduckgo', label: 'DuckDuckGo', iconName: 'Globe', color: 'text-orange-300', url: 'https://duckduckgo.com/?q=' },
+  { id: 'vimeo', label: 'Vimeo', iconName: 'Video', color: 'text-sky-400', url: 'https://vimeo.com/search?q=' },
+];
+
+// Helper to map icon names to components
+const IconMap = {
+  SearchIcon, Music, Hash, Code, ExternalLink, Globe, Youtube, Film, Command, Sparkles, Briefcase, Bot, Brain, Twitter, Video
+};
+
 // --- COMPONENTS ---
 
-const QuickAccessButton = ({ icon: Icon, label, color, onClick, href }) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener noreferrer"
-    onClick={onClick}
-    className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-neutral-800/80 border border-white/10 hover:bg-neutral-700 hover:border-white/20 transition-all duration-200 group active:scale-95 cursor-pointer backdrop-blur-md shadow-lg"
-  >
-    <div className={`p-3 rounded-xl bg-neutral-950 shadow-inner group-hover:scale-110 transition-transform duration-200 ${color}`}>
-      <Icon size={24} />
+// Sortable Button Component
+const SortableQuickAccessButton = ({ id, iconName, label, color, onClick, href }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const Icon = IconMap[iconName] || Globe;
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...attributes} 
+      {...listeners} 
+      className="touch-none select-none relative" // touch-none prevents scrolling while dragging
+    >
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          // Double check: Prevent click if we were dragging
+          if (isDragging) {
+             e.preventDefault();
+             e.stopPropagation();
+             return;
+          }
+          if (onClick) onClick(e);
+        }}
+        // CRITICAL FIX: This prevents the mouseup/click event from reaching the link if it's being dragged
+        style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
+        className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-neutral-800 border border-white/10 hover:bg-neutral-700 hover:border-white/30 transition-colors duration-200 group cursor-grab active:cursor-grabbing shadow-md h-full"
+      >
+        <div className={`p-3 rounded-xl bg-neutral-900 shadow-inner group-hover:scale-110 transition-transform duration-200 ${color}`}>
+          <Icon size={24} />
+        </div>
+        <span className="text-[10px] font-bold text-neutral-300 group-hover:text-white transition-colors text-center leading-tight select-none">
+          {label}
+        </span>
+      </a>
     </div>
-    <span className="text-[11px] font-semibold text-neutral-300 group-hover:text-white transition-colors text-center leading-tight">
-      {label}
-    </span>
-  </a>
-);
+  );
+};
 
 const Card = ({ title, subtitle, image, link, extra, type }) => (
   <a 
@@ -105,50 +157,76 @@ const CodeCard = ({ repo }) => (
   </a>
 );
 
-const DeepLinkButton = ({ platform, icon, color, url, query, desc, onClick }) => (
-  <a
-    href={url}
-    target="_blank"
-    rel="noopener noreferrer"
-    onClick={onClick}
-    className={`flex items-center justify-between p-5 rounded-2xl bg-neutral-900/50 border border-white/5 hover:border-${color}-500/50 hover:bg-neutral-800/80 group transition-all duration-300 active:scale-[0.98] cursor-pointer`}
-  >
-    <div className="flex items-center space-x-4">
-      <div className={`p-3 rounded-xl bg-neutral-950 text-${color}-400 group-hover:text-white group-hover:bg-${color}-500 transition-colors duration-300 shadow-lg`}>
-        {icon}
-      </div>
-      <div>
-        <h4 className="text-white font-medium text-lg">{platform}</h4>
-        <p className="text-neutral-400 text-sm mt-0.5">{desc || `Search ${platform} for "${query}"`}</p>
-      </div>
-    </div>
-    <ExternalLink size={20} className="text-neutral-600 group-hover:text-white transition-colors" />
-  </a>
-);
-
 export default function SearchApp() {
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("web");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
   const [searchedTerm, setSearchedTerm] = useState("");
+  
+  // Custom Quick Access State
+  const [quickApps, setQuickApps] = useState(DEFAULT_APPS);
 
-  const handleSearch = async (e) => {
+  // Auto Mic State
+  const [autoMic, setAutoMic] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  // Load from LocalStorage on mount
+  useEffect(() => {
+    const savedOrder = localStorage.getItem('reeSearch_quickAccess');
+    const savedAutoMic = localStorage.getItem('reeSearch_autoMic');
+
+    if (savedOrder) {
+      try {
+        setQuickApps(JSON.parse(savedOrder));
+      } catch (e) {
+        console.error("Failed to load quick access order", e);
+      }
+    }
+    if (savedAutoMic) {
+      setAutoMic(savedAutoMic === 'true');
+    }
+  }, []);
+
+  // Drag Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      setQuickApps((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem('reeSearch_quickAccess', JSON.stringify(newOrder));
+        return newOrder;
+      });
+    }
+  };
+
+  // SEARCH FUNCTION - Refactored to accept manual input (from voice)
+  const handleSearch = async (e, manualQuery) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    const term = typeof manualQuery === 'string' ? manualQuery : query;
+
+    if (!term.trim()) return;
 
     setLoading(true);
-    setSearchedTerm(query);
+    setSearchedTerm(term);
+    if (typeof manualQuery === 'string') setQuery(term);
     setResults([]);
 
     if (activeTab === "music") {
-      const data = await searchMusic(query);
+      const data = await searchMusic(term);
       setResults(data);
     } else if (activeTab === "code") {
-      const data = await searchGithub(query);
+      const data = await searchGithub(term);
       setResults(data);
     } else {
-      // Web, Video, Social, AI use deep links
       setResults([true]); 
     }
     
@@ -157,27 +235,106 @@ export default function SearchApp() {
 
   useEffect(() => {
     if (searchedTerm) {
-      handleSearch();
+      // Re-run search if tab changes (but not if it was just set by handleSearch)
+      // Actually handleSearch sets results, so we only need to refetch if tab changes
+      // This effect is mostly for when user clicks a tab AFTER searching
+      const refreshSearch = async () => {
+         setLoading(true);
+         setResults([]);
+         if (activeTab === "music") {
+           const data = await searchMusic(searchedTerm);
+           setResults(data);
+         } else if (activeTab === "code") {
+           const data = await searchGithub(searchedTerm);
+           setResults(data);
+         } else {
+           setResults([true]); 
+         }
+         setLoading(false);
+      }
+      refreshSearch();
     }
-  }, [activeTab]);
+  }, [activeTab]); // Only dependency is activeTab here
 
-  const copyToClipboard = () => {
-    if (searchedTerm) {
+  // VOICE SEARCH LOGIC
+  const handleMicClick = () => {
+    if (isListening) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. Try Chrome or Edge.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (e) => {
+      console.error("Speech Error:", e);
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) {
+        handleSearch(null, transcript);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error("Failed to start speech recognition:", e);
+    }
+  };
+
+  // Auto-Start Mic Effect
+  useEffect(() => {
+    // Only try to auto-start if enabled, not listening, and no search yet
+    if (autoMic && !searchedTerm && !isListening) {
+      const t = setTimeout(() => {
+        handleMicClick();
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [autoMic]); // Run when autoMic loads/changes
+
+  const toggleAutoMic = () => {
+    const newState = !autoMic;
+    setAutoMic(newState);
+    localStorage.setItem('reeSearch_autoMic', String(newState));
+  };
+
+  const copyToClipboard = async () => {
+    if (!searchedTerm) return;
+    try {
+      await navigator.clipboard.writeText(searchedTerm);
+    } catch (err) {
       const textArea = document.createElement("textarea");
       textArea.value = searchedTerm;
-      textArea.style.position = "fixed";
+      textArea.setAttribute('readonly', '');
+      textArea.style.position = "absolute";
       textArea.style.left = "-9999px";
-      textArea.style.top = "0";
       document.body.appendChild(textArea);
-      textArea.focus();
       textArea.select();
       try {
         document.execCommand('copy');
-      } catch (err) {
-        console.error('Fallback: Oops, unable to copy', err);
-      }
+      } catch (e) { console.error("Copy failed", e); }
       document.body.removeChild(textArea);
     }
+  };
+
+  // Helper to construct URL
+  const getAppUrl = (app) => {
+    if (!searchedTerm) return '#';
+    if (app.url.includes('?')) {
+      return `${app.url}${encodeURIComponent(searchedTerm)}${app.suffix || ''}`;
+    }
+    return `${app.url}${searchedTerm.replace(/\s+/g, '')}${app.suffix || ''}`;
   };
 
   return (
@@ -191,6 +348,21 @@ export default function SearchApp() {
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6">
         
+        {/* Settings / Auto-Mic Toggle */}
+        <div className="absolute top-6 right-4 sm:right-6">
+           <button 
+             onClick={toggleAutoMic}
+             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+               autoMic 
+               ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' 
+               : 'bg-neutral-900/50 border-white/10 text-neutral-500 hover:text-neutral-300'
+             }`}
+           >
+             {autoMic ? <Zap size={14} className="fill-current" /> : <ZapOff size={14} />}
+             Auto-Mic {autoMic ? 'ON' : 'OFF'}
+           </button>
+        </div>
+
         {/* Header & Search */}
         <div className="pt-12 pb-8 flex flex-col items-center justify-center space-y-8">
           
@@ -200,16 +372,26 @@ export default function SearchApp() {
           </h1>
 
           <form onSubmit={handleSearch} className="w-full max-w-xl relative group">
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-blue-600 rounded-full blur opacity-25 group-focus-within:opacity-50 transition-opacity duration-500" />
+            <div className={`absolute inset-0 bg-gradient-to-r from-violet-600 to-blue-600 rounded-full blur opacity-25 transition-opacity duration-500 ${isListening ? 'opacity-70 animate-pulse' : 'group-focus-within:opacity-50'}`} />
             <div className="relative flex items-center bg-neutral-900 border border-white/10 rounded-full shadow-2xl overflow-hidden">
               <SearchIcon className="ml-5 text-neutral-500" size={20} />
               <input 
                 type="text" 
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="What are you looking for?" 
+                placeholder={isListening ? "Listening..." : "What are you looking for?"}
                 className="w-full bg-transparent text-white px-4 py-4 focus:outline-none placeholder:text-neutral-600"
               />
+              
+              {/* Mic Button */}
+              <button 
+                type="button" 
+                onClick={handleMicClick}
+                className={`mr-2 p-2 rounded-full transition-all ${isListening ? 'text-red-500 bg-red-500/10 animate-pulse' : 'text-neutral-400 hover:text-white hover:bg-white/10'}`}
+              >
+                <Mic size={20} />
+              </button>
+
               <button 
                 type="submit"
                 className="mr-2 bg-neutral-800 hover:bg-white hover:text-black text-white px-6 py-2 rounded-full text-sm font-medium transition-all duration-300"
@@ -219,76 +401,50 @@ export default function SearchApp() {
             </div>
           </form>
 
-          {/* QUICK ACCESS SECTION (Moved above tabs) */}
+          {/* CUSTOMIZABLE QUICK ACCESS SECTION */}
           {!loading && searchedTerm && (
              <div className="w-full max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center gap-2 mb-3 px-1 opacity-60">
-                  <LayoutGrid size={14} className="text-violet-400" />
-                  <span className="text-xs font-bold tracking-wider text-neutral-300 uppercase">Quick Access</span>
+                <div className="flex items-center justify-between mb-3 px-1 opacity-80">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid size={16} className="text-violet-400" />
+                    <span className="text-sm font-bold tracking-wider text-neutral-200 uppercase">Quick Access</span>
+                  </div>
+                  <span className="text-[10px] text-neutral-500">Hold to Reorder</span>
                 </div>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
-                  <QuickAccessButton 
-                    label="Google" 
-                    icon={SearchIcon} 
-                    color="text-violet-400" 
-                    href={`https://www.google.com/search?q=${encodeURIComponent(searchedTerm)}`}
-                  />
-                  <QuickAccessButton 
-                    label="ChatGPT" 
-                    icon={Bot} 
-                    color="text-emerald-400" 
-                    href="https://chatgpt.com/"
-                    onClick={copyToClipboard}
-                  />
-                  <QuickAccessButton 
-                    label="Gemini" 
-                    icon={Brain} 
-                    color="text-blue-400" 
-                    href="https://gemini.google.com/app"
-                    onClick={copyToClipboard}
-                  />
-                  <QuickAccessButton 
-                    label="YouTube" 
-                    icon={Youtube} 
-                    color="text-red-500" 
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(searchedTerm)}`}
-                  />
-                  <QuickAccessButton 
-                    label="Instagram" 
-                    icon={Hash} 
-                    color="text-pink-400" 
-                    href={`https://www.instagram.com/explore/tags/${searchedTerm.replace(/\s+/g, '')}/`}
-                  />
-                  <QuickAccessButton 
-                    label="Reddit" 
-                    icon={ExternalLink} 
-                    color="text-orange-400" 
-                    href={`https://www.reddit.com/search/?q=${encodeURIComponent(searchedTerm)}`}
-                  />
-                  <QuickAccessButton 
-                    label="Dailymotion" 
-                    icon={Film} 
-                    color="text-neutral-400" 
-                    href={`https://www.dailymotion.com/search/${encodeURIComponent(searchedTerm)}`}
-                  />
-                  <QuickAccessButton 
-                    label="LinkedIn" 
-                    icon={Briefcase} 
-                    color="text-blue-500" 
-                    href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(searchedTerm)}`}
-                  />
-                </div>
+                
+                <DndContext 
+                  sensors={sensors} 
+                  collisionDetection={closestCenter} 
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext 
+                    items={quickApps.map(a => a.id)} 
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-6 gap-3">
+                      {quickApps.map((app) => (
+                        <SortableQuickAccessButton 
+                          key={app.id}
+                          id={app.id}
+                          label={app.label}
+                          iconName={app.iconName}
+                          color={app.color}
+                          href={app.copy ? app.url : getAppUrl(app)}
+                          onClick={app.copy ? copyToClipboard : undefined}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+                
                 <div className="h-px bg-white/10 my-8" />
              </div>
           )}
 
-          {/* Navigation Tabs */}
+          {/* Navigation Tabs - Filter View */}
           <div className="flex flex-wrap justify-center gap-2">
             {[
               { id: 'web', icon: Globe, label: 'Web' },
-              { id: 'ai', icon: Sparkles, label: 'AI' },
-              { id: 'social', icon: Hash, label: 'Social' },
-              { id: 'video', icon: Youtube, label: 'Video' },
               { id: 'music', icon: Music, label: 'Music' },
               { id: 'code', icon: Code, label: 'Code' },
             ].map((tab) => (
@@ -327,80 +483,6 @@ export default function SearchApp() {
             </div>
           )}
 
-          {/* 1. WEB (Google Exact Match) */}
-          {!loading && searchedTerm && activeTab === 'web' && (
-             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
-               <div className="flex items-center justify-between mb-4 px-2">
-                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Web Results</h2>
-               </div>
-               <div className="grid grid-cols-1 gap-4">
-                <DeepLinkButton 
-                  platform="Google Exact Match" 
-                  color="violet"
-                  icon={<SearchIcon />}
-                  query={searchedTerm}
-                  url={`https://www.google.com/search?q="${encodeURIComponent(searchedTerm)}"`} 
-                  desc="Find exact matches for your query"
-                />
-                <DeepLinkButton 
-                  platform="Google Search" 
-                  color="blue"
-                  icon={<Globe />}
-                  query={searchedTerm}
-                  url={`https://www.google.com/search?q=${encodeURIComponent(searchedTerm)}`} 
-                  desc="Standard Google search results"
-                />
-                <DeepLinkButton 
-                  platform="DuckDuckGo" 
-                  color="orange"
-                  icon={<Shield />} 
-                  url={`https://duckduckgo.com/?q=${encodeURIComponent(searchedTerm)}`} 
-                  desc="Private search without tracking"
-                />
-               </div>
-             </div>
-          )}
-
-          {/* 2. AI */}
-          {!loading && searchedTerm && activeTab === 'ai' && (
-             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
-               <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 mb-6 flex gap-3 items-center">
-                  <Sparkles className="text-violet-400 shrink-0" size={20} />
-                  <p className="text-sm text-violet-200">
-                    Tip: The AI buttons below also <b>copy your query</b> to the clipboard.
-                  </p>
-               </div>
-               <div className="grid grid-cols-1 gap-4">
-                <DeepLinkButton 
-                  platform="ChatGPT" 
-                  color="emerald"
-                  icon={<Bot />}
-                  query={searchedTerm}
-                  url="https://chatgpt.com/" 
-                  desc="Opens ChatGPT (Query copied)"
-                  onClick={copyToClipboard}
-                />
-                <DeepLinkButton 
-                  platform="Gemini" 
-                  color="blue"
-                  icon={<Brain />}
-                  query={searchedTerm}
-                  url="https://gemini.google.com/app" 
-                  desc="Opens Google Gemini (Query copied)"
-                  onClick={copyToClipboard}
-                />
-                <DeepLinkButton 
-                  platform="Perplexity" 
-                  color="cyan"
-                  icon={<SearchIcon />}
-                  query={searchedTerm}
-                  url={`https://www.perplexity.ai/search?q=${encodeURIComponent(searchedTerm)}`} 
-                  desc="AI-powered answer engine"
-                />
-               </div>
-             </div>
-          )}
-
           {/* 3. MUSIC */}
           {!loading && searchedTerm && activeTab === 'music' && (
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -423,38 +505,6 @@ export default function SearchApp() {
             </div>
           )}
 
-          {/* 4. VIDEO */}
-          {!loading && searchedTerm && activeTab === 'video' && (
-             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
-               <div className="flex items-center justify-between mb-4 px-2">
-                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Video Results</h2>
-               </div>
-               <div className="grid grid-cols-1 gap-4">
-                <DeepLinkButton 
-                  platform="YouTube" 
-                  color="red"
-                  icon={<Youtube />}
-                  query={searchedTerm}
-                  url={`https://www.youtube.com/results?search_query=${encodeURIComponent(searchedTerm)}`} 
-                />
-                <DeepLinkButton 
-                  platform="Vimeo" 
-                  color="sky"
-                  icon={<Film />}
-                  query={searchedTerm}
-                  url={`https://vimeo.com/search?q=${encodeURIComponent(searchedTerm)}`} 
-                />
-                <DeepLinkButton 
-                  platform="Dailymotion" 
-                  color="neutral"
-                  icon={<Film />}
-                  query={searchedTerm}
-                  url={`https://www.dailymotion.com/search/${encodeURIComponent(searchedTerm)}`} 
-                />
-               </div>
-             </div>
-          )}
-
           {/* 5. CODE */}
           {!loading && searchedTerm && activeTab === 'code' && (
             <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -468,68 +518,8 @@ export default function SearchApp() {
               </div>
             </div>
           )}
-
-          {/* 6. SOCIAL */}
-          {!loading && searchedTerm && activeTab === 'social' && (
-            <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="flex items-center justify-between mb-4 px-2">
-                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Social Results</h2>
-               </div>
-              <div className="grid grid-cols-1 gap-4">
-                <DeepLinkButton 
-                  platform="Instagram" 
-                  color="pink"
-                  icon={<Hash />}
-                  query={searchedTerm}
-                  url={`https://www.instagram.com/explore/tags/${searchedTerm.replace(/\s+/g, '')}/`} 
-                  desc="Search Hashtags"
-                />
-                <DeepLinkButton 
-                  platform="LinkedIn" 
-                  color="blue"
-                  icon={<Briefcase />}
-                  query={searchedTerm}
-                  url={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(searchedTerm)}`} 
-                  desc="Search People & Jobs"
-                />
-                <DeepLinkButton 
-                  platform="Reddit" 
-                  color="orange"
-                  icon={<ExternalLink />}
-                  query={searchedTerm}
-                  url={`https://www.reddit.com/search/?q=${encodeURIComponent(searchedTerm)}`} 
-                />
-                <DeepLinkButton 
-                  platform="Twitter / X" 
-                  color="neutral"
-                  icon={<Hash />}
-                  query={searchedTerm}
-                  url={`https://twitter.com/search?q=${encodeURIComponent(searchedTerm)}`} 
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
-}
-
-// Icon helper for DDG since Shield wasn't imported in main list
-function Shield(props) {
-  return (
-    <svg 
-      {...props}
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  )
 }
